@@ -8,7 +8,7 @@ import (
 	user "github.com/raffops/chat/internal/user/repository"
 	"github.com/raffops/chat/pb"
 	"github.com/raffops/chat/pkg/jwt_manager"
-	passwordHasher "github.com/raffops/chat/pkg/password_hasher"
+	"github.com/raffops/chat/pkg/password_hasher"
 	"google.golang.org/grpc"
 	"log"
 	"net"
@@ -30,9 +30,9 @@ func main() {
 	}(db)
 
 	userRepo := user.NewPostgresRepo(db)
-	passHasher := passwordHasher.NewBcryptHasher()
+	passwordHasher := password_hasher.NewBcryptHasher()
 	jwtManager := jwt_manager.NewJwtManager(secretKey, jwtDuration)
-	authSrv := authService.NewUserService(userRepo, passHasher, jwtManager)
+	authSrv := authService.NewUserService(userRepo, passwordHasher, jwtManager)
 
 	authServer := authcontroller.GrpcAuthServer{
 		AuthService: authSrv,
