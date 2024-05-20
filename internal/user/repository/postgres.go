@@ -1,9 +1,10 @@
-package repository
+package user
 
 import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/raffops/chat/internal/errs"
 	model "github.com/raffops/chat/internal/models"
 	"log"
@@ -28,11 +29,12 @@ func (p PostgresRepository) fetchUser(id, name, password, role sql.NullString,
 	}
 }
 
-// Get retrieves a user from the Postgres database by their name.
-// It returns a model.User object and an error. If the user is not found, it returns
-// a 404 error. If there is an internal server error, it returns a 500 error.
+// Get retrieves a user from the Postgres database by their name or id.
+// It returns a model.User object and an error.
+// If the user is not found, it returns a 404 error.
+// If there is an internal server error, it returns a 500 error.
 // Otherwise, it returns the user and a nil error.
-func (p PostgresRepository) Get(ctx context.Context, name string) (model.User, *errs.Err) {
+func (p PostgresRepository) GetUser(ctx context.Context, key, value string) (model.User, *errs.Err) {
 	var id, username, password, role sql.NullString
 	var createdAt, updatedAt, deleteAt sql.NullTime
 	queryString := `
@@ -44,9 +46,10 @@ func (p PostgresRepository) Get(ctx context.Context, name string) (model.User, *
 			   	created_at,
 			   	updated_at,
 			   	deleted_at
-			FROM public.user WHERE name = $1`
+			FROM public.user WHERE %s = $1`
 
-	err := p.db.QueryRowContext(ctx, queryString, name).
+	queryString = fmt.Sprintf(queryString, key)
+	err := p.db.QueryRowContext(ctx, queryString, value).
 		Scan(&id, &username, &password, &role, &createdAt, &updatedAt, &deleteAt)
 
 	switch {
@@ -61,7 +64,29 @@ func (p PostgresRepository) Get(ctx context.Context, name string) (model.User, *
 	}
 }
 
-func (p PostgresRepository) Create(ctx context.Context, user model.User) (model.User, *errs.Err) {
+func (p PostgresRepository) ListUser(ctx context.Context) ([]model.User, *errs.Err) {
+	var users []model.User
+	queryString := `SELECT id, name, password, role, created_at, updated_at, deleted_at FROM public.user`
+	rows, err := p.db.QueryContext(ctx, queryString)
+	if err != nil {
+		log.Printf("query error: %v\n", err)
+		return nil, &errs.Err{Message: "internal server error", Code: http.StatusInternalServerError}
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, username, password, role sql.NullString
+		var createdAt, updatedAt, deleteAt sql.NullTime
+		err := rows.Scan(&id, &username, &password, &role, &createdAt, &updatedAt, &deleteAt)
+		if err != nil {
+			log.Printf("scan error: %v\n", err)
+			return nil, &errs.Err{Message: "internal server error", Code: http.StatusInternalServerError}
+		}
+		users = append(users, p.fetchUser(id, username, password, role, createdAt, updatedAt, deleteAt))
+	}
+	return users, nil
+}
+
+func (p PostgresRepository) CreateUser(ctx context.Context, user model.User) (model.User, *errs.Err) {
 	var id, name, password, role sql.NullString
 	var createdAt sql.NullTime
 	createUserQuery := `INSERT INTO public."user" (name, password, role) VALUES ($1, $2, $3) 
@@ -77,7 +102,7 @@ func (p PostgresRepository) Create(ctx context.Context, user model.User) (model.
 	return p.fetchUser(id, name, password, role, createdAt, sql.NullTime{}, sql.NullTime{}), nil
 }
 
-func NewPostgresRepo(db *sql.DB) Repository {
+func NewPostgresRepo(db *sql.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
@@ -85,12 +110,12 @@ func NewPostgresRepo(db *sql.DB) Repository {
 //	postgresConn := database.GetPostgresConn()
 //	defer postgresConn.Close()
 //	repo := NewPostgresRepo(postgresConn)
-//	user, err := repo.Create(context.Background(), model.User{Name: "test", Password: "password"})
+//	user, err := repo.CreateUser(context.Background(), model.User{Name: "test", Password: "password"})
 //	if err != nil {
 //		println(err)
 //	}
 //	fmt.Print(user)
-//	get, err := repo.Get(context.Background(), "test")
+//	get, err := repo.GetUser(context.Background(), "test")
 //	if err != nil {
 //		return
 //	}

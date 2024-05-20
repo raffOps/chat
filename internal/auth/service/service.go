@@ -1,78 +1,65 @@
-package service
+package auth
 
 import (
 	"context"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/go-playground/validator/v10"
-	"github.com/raffops/chat/internal/auth/repository"
+	"github.com/raffops/chat/internal/auth"
 	"github.com/raffops/chat/internal/errs"
-	model "github.com/raffops/chat/internal/models"
+	models "github.com/raffops/chat/internal/models"
+	"github.com/raffops/chat/pkg/jwt_manager"
 	"github.com/raffops/chat/pkg/password_hasher"
+	"log"
 	"net/http"
-	"os"
-	"time"
-)
-
-var (
-	secretKey = []byte(os.Getenv("SECRET_KEY"))
 )
 
 type service struct {
-	repo   repository.Repository
-	hasher password_hasher.PasswordHasher
+	repo       auth.Repository
+	hasher     password_hasher.PasswordHasher
+	jwtManager jwt_manager.JwtManager
 }
 
 func (s *service) Login(ctx context.Context, name, password string) (string, *errs.Err) {
-	user, err := s.repo.Get(ctx, name)
-	if err != nil {
-		return "", err
+	user, err := s.repo.GetUser(ctx, "name", name)
+	if err != nil && err.Code == http.StatusInternalServerError {
+		log.Printf("failed to get user: %v", err)
+		return "", &errs.Err{Message: "failed to get user", Code: http.StatusInternalServerError}
 	}
-	if !s.hasher.CheckPasswordHash(password, user.Password) {
-		return "", &errs.Err{Message: "invalid password", Code: http.StatusUnauthorized}
-	}
-
-	claims := &model.Claims{
-		Role: user.Role,
-		StandardClaims: jwt.StandardClaims{
-			Subject:   user.Id,
-			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
-		},
+	if err != nil || !s.hasher.CheckPasswordHash(password, user.Password) {
+		return "", &errs.Err{Message: "invalid username/password", Code: http.StatusUnauthorized}
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokeString, errSign := token.SignedString(secretKey)
-	if errSign != nil {
-		return "", &errs.Err{Message: "failed to sign token", Code: http.StatusInternalServerError}
-	}
-	return tokeString, nil
+	return s.jwtManager.GenerateToken(user)
 }
 
-func (s *service) SignUp(ctx context.Context, name, password string) (model.User, *errs.Err) {
-	user := model.User{Name: name, Password: password, Role: "USER"}
-
+func (s *service) SignUp(ctx context.Context, name, password string) (models.User, *errs.Err) {
+	user := models.User{Name: name, Password: password, Role: "USER"}
 	validate := validator.New()
 	err := validate.Struct(user)
 	if err != nil {
-		return model.User{}, &errs.Err{Message: err.Error(), Code: http.StatusBadRequest}
+		return models.User{}, &errs.Err{Message: err.Error(), Code: http.StatusBadRequest}
 	}
 
-	foundUser, errGet := s.repo.Get(ctx, user.Name)
+	foundUser, errGet := s.repo.GetUser(ctx, "name", user.Name)
 	if errGet == nil && foundUser.Name == user.Name {
-		return model.User{}, &errs.Err{Message: "user already exists", Code: http.StatusConflict}
+		return models.User{}, &errs.Err{Message: "user already exists", Code: http.StatusConflict}
 	}
 
 	user.Password, err = s.hasher.HashPassword(user.Password)
 	if err != nil {
-		return model.User{}, &errs.Err{Message: "failed to hash password", Code: http.StatusInternalServerError}
+		log.Printf("failed to hash password: %v", err)
+		return models.User{}, &errs.Err{Message: "failed to hash password", Code: http.StatusInternalServerError}
 	}
 
-	createdUser, errCreate := s.repo.Create(ctx, user)
+	createdUser, errCreate := s.repo.CreateUser(ctx, user)
 	if errCreate != nil {
-		return model.User{}, errCreate
+		return models.User{}, errCreate
 	}
 	return createdUser, nil
 }
 
-func NewUserService(repo repository.Repository, hasher password_hasher.PasswordHasher) Service {
-	return &service{repo: repo, hasher: hasher}
+func NewUserService(repo auth.Repository,
+	hasher password_hasher.PasswordHasher,
+	jwtManager jwt_manager.JwtManager,
+) auth.Service {
+	return &service{repo: repo, hasher: hasher, jwtManager: jwtManager}
 }

@@ -3,3 +3,6 @@ issues:
     - path: vendor/.*
       linters:
         - "*"
+    - path: internal/mocks/.*
+      linters:
+        - "*"

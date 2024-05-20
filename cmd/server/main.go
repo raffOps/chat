@@ -1,27 +1,40 @@
 package main
 
 import (
-	grpcController "github.com/raffops/chat/internal/auth/controller/grpc"
-	authRepository "github.com/raffops/chat/internal/auth/repository"
+	"database/sql"
+	authcontroller "github.com/raffops/chat/internal/auth/controller"
 	authService "github.com/raffops/chat/internal/auth/service"
 	"github.com/raffops/chat/internal/database"
+	user "github.com/raffops/chat/internal/user/repository"
 	"github.com/raffops/chat/pb"
+	"github.com/raffops/chat/pkg/jwt_manager"
 	passwordHasher "github.com/raffops/chat/pkg/password_hasher"
 	"google.golang.org/grpc"
 	"log"
 	"net"
+	"time"
+)
+
+var (
+	secretKey   = []byte("secret")
+	jwtDuration = 5 * time.Duration(time.Minute)
 )
 
 func main() {
 	db := database.GetPostgresConn()
-	defer db.Close()
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+			log.Printf("Failed to close db: %v", err)
+		}
+	}(db)
 
-	authRepo := authRepository.NewPostgresRepo(db)
+	userRepo := user.NewPostgresRepo(db)
 	passHasher := passwordHasher.NewBcryptHasher()
-	authSrv := authService.NewUserService(authRepo, passHasher)
+	jwtManager := jwt_manager.NewJwtManager(secretKey, jwtDuration)
+	authSrv := authService.NewUserService(userRepo, passHasher, jwtManager)
 
-	authController := grpcController.Server{
-		AuthServer:  &grpcController.Server{},
+	authServer := authcontroller.GrpcAuthServer{
 		AuthService: authSrv,
 	}
 
@@ -30,7 +43,7 @@ func main() {
 		log.Fatalf("Error: %v", err)
 	}
 	server := grpc.NewServer()
-	pb.RegisterAuthServer(server, &authController)
+	pb.RegisterAuthServer(server, &authServer)
 
 	log.Println("Listening on port 9000...")
 	if err := server.Serve(listener); err != nil {

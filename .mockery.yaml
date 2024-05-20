@@ -1,0 +1,15 @@
+dir: "internal/mocks/{{.PackageName}}"
+mockname: "{{.InterfaceName}}"
+outpkg: "{{.PackageName}}"
+with-expecter: true
+
+packages:
+  github.com/raffops/chat/internal/auth:
+    config:
+      recursive: true
+  github.com/raffops/chat/pkg/jwt_manager:
+    config:
+      recursive: true
+  github.com/raffops/chat/pkg/password_hasher:
+    config:
+      recursive: true

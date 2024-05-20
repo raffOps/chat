@@ -11,6 +11,5 @@ migration-%:
 migration-up:
 	migrate -path ./database/migrations -database "postgresql://chat:chat@localhost:5433/chat?sslmode=disable" up
 
-
 mockery:
-	mockery --all --case underscore --output internal/mock
+	mockery --all

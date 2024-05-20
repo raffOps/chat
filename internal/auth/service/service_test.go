@@ -1,14 +1,17 @@
-package service
+package auth
 
 import (
 	"context"
-	"github.com/raffops/chat/internal/auth/repository"
-	repoMock "github.com/raffops/chat/internal/auth/repository/mocks"
+	"github.com/raffops/chat/internal/auth"
 	"github.com/raffops/chat/internal/errs"
-	hashMock "github.com/raffops/chat/internal/mock"
+	mockAuth "github.com/raffops/chat/internal/mocks/auth"
+	mockJwtManager "github.com/raffops/chat/internal/mocks/jwt_manager"
+	mockPasswordHasher "github.com/raffops/chat/internal/mocks/password_hasher"
 	"github.com/raffops/chat/internal/models"
+	"github.com/raffops/chat/pkg/jwt_manager"
 	"github.com/raffops/chat/pkg/password_hasher"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"net/http"
 	"testing"
 )
@@ -16,12 +19,12 @@ import (
 const (
 	TestUserName     = "testuser"
 	TestUserPassword = "DSIOKUFHJIOSDUYFIOSDUF2378642378623"
-	TestUserRole     = "ADMIN"
+	TestUserRole     = "USER"
 )
 
 var (
 	TestUser = models.User{
-		Id:       "foo",
+		Id:       "",
 		Name:     TestUserName,
 		Password: TestUserPassword,
 		Role:     TestUserRole,
@@ -30,8 +33,9 @@ var (
 
 func Test_service_Login(t *testing.T) {
 	type fields struct {
-		repo   func() repository.Repository
-		hasher func() password_hasher.PasswordHasher
+		repo       func() auth.Repository
+		hasher     func() password_hasher.PasswordHasher
+		jwtManager func() jwt_manager.JwtManager
 	}
 	type args struct {
 		ctx      context.Context
@@ -47,17 +51,23 @@ func Test_service_Login(t *testing.T) {
 		{
 			name: "valid user and password",
 			fields: fields{
-				repo: func() repository.Repository {
-					repo := repoMock.NewRepository(t)
-					repo.On("Get", context.Background(), TestUserName).
+				repo: func() auth.Repository {
+					repo := mockAuth.NewRepository(t)
+					repo.On("GetUser", context.Background(), "name", TestUserName).
 						Return(TestUser, nil)
 					return repo
 				},
 				hasher: func() password_hasher.PasswordHasher {
-					hasher := hashMock.NewPasswordHasher(t)
+					hasher := mockPasswordHasher.NewPasswordHasher(t)
 					hasher.On("CheckPasswordHash", TestUserPassword, TestUser.Password).
 						Return(true)
 					return hasher
+				},
+				jwtManager: func() jwt_manager.JwtManager {
+					jwtManager := mockJwtManager.NewJwtManager(t)
+					jwtManager.On("GenerateToken", TestUser).
+						Return(mock.Anything, nil)
+					return jwtManager
 				},
 			},
 			args: args{
@@ -70,50 +80,53 @@ func Test_service_Login(t *testing.T) {
 		{
 			name: "invalid user",
 			fields: fields{
-				repo: func() repository.Repository {
-					repo := repoMock.NewRepository(t)
-					repo.On("Get", context.Background(), TestUserName).
+				repo: func() auth.Repository {
+					repo := mockAuth.NewRepository(t)
+					repo.On("GetUser", context.Background(), "name", TestUserName).
 						Return(models.User{}, &errs.Err{Message: "no user found", Code: http.StatusNotFound})
 					return repo
 				},
-				hasher: func() password_hasher.PasswordHasher { return nil },
+				hasher:     func() password_hasher.PasswordHasher { return nil },
+				jwtManager: func() jwt_manager.JwtManager { return nil },
 			},
 			args: args{
 				ctx:      context.Background(),
 				name:     TestUserName,
 				password: TestUserPassword,
 			},
-			wantErr: &errs.Err{Message: "no user found", Code: http.StatusNotFound},
+			wantErr: &errs.Err{Message: "invalid username/password", Code: http.StatusUnauthorized},
 		},
 		{
 			name: "invalid password",
 			fields: fields{
-				repo: func() repository.Repository {
-					repo := repoMock.NewRepository(t)
-					repo.On("Get", context.Background(), TestUserName).
+				repo: func() auth.Repository {
+					repo := mockAuth.NewRepository(t)
+					repo.On("GetUser", context.Background(), "name", TestUserName).
 						Return(TestUser, nil)
 					return repo
 				},
 				hasher: func() password_hasher.PasswordHasher {
-					hasher := hashMock.NewPasswordHasher(t)
+					hasher := mockPasswordHasher.NewPasswordHasher(t)
 					hasher.On("CheckPasswordHash", TestUserPassword, TestUser.Password).
 						Return(false)
 					return hasher
 				},
+				jwtManager: func() jwt_manager.JwtManager { return nil },
 			},
 			args: args{
 				ctx:      context.Background(),
 				name:     TestUserName,
 				password: TestUserPassword,
 			},
-			wantErr: &errs.Err{Message: "invalid password", Code: http.StatusUnauthorized},
+			wantErr: &errs.Err{Message: "invalid username/password", Code: http.StatusUnauthorized},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &service{
-				repo:   tt.fields.repo(),
-				hasher: tt.fields.hasher(),
+				repo:       tt.fields.repo(),
+				hasher:     tt.fields.hasher(),
+				jwtManager: tt.fields.jwtManager(),
 			}
 			_, gotError := s.Login(tt.args.ctx, tt.args.name, tt.args.password)
 			assert.Equal(t, tt.wantErr, gotError)
@@ -123,7 +136,7 @@ func Test_service_Login(t *testing.T) {
 
 func Test_service_SignUp(t *testing.T) {
 	type fields struct {
-		repo   func() repository.Repository
+		repo   func() auth.Repository
 		hasher func() password_hasher.PasswordHasher
 	}
 	type args struct {
@@ -140,16 +153,16 @@ func Test_service_SignUp(t *testing.T) {
 		{
 			name: "valid user and password",
 			fields: fields{
-				repo: func() repository.Repository {
-					repo := repoMock.NewRepository(t)
-					repo.On("Get", context.Background(), TestUserName).
+				repo: func() auth.Repository {
+					repo := mockAuth.NewRepository(t)
+					repo.On("GetUser", context.Background(), "name", TestUserName).
 						Return(models.User{}, nil)
-					repo.On("Create", context.Background(), TestUser).
+					repo.On("CreateUser", context.Background(), TestUser).
 						Return(TestUser, nil)
 					return repo
 				},
 				hasher: func() password_hasher.PasswordHasher {
-					hasher := hashMock.NewPasswordHasher(t)
+					hasher := mockPasswordHasher.NewPasswordHasher(t)
 					hasher.On("HashPassword", TestUser.Password).Return(TestUser.Password, nil)
 					return hasher
 				},
@@ -164,7 +177,7 @@ func Test_service_SignUp(t *testing.T) {
 		{
 			name: "empty name",
 			fields: fields{
-				repo:   func() repository.Repository { return nil },
+				repo:   func() auth.Repository { return nil },
 				hasher: func() password_hasher.PasswordHasher { return nil },
 			},
 			args: args{
@@ -182,7 +195,7 @@ func Test_service_SignUp(t *testing.T) {
 		{
 			name: "empty password",
 			fields: fields{
-				repo:   func() repository.Repository { return nil },
+				repo:   func() auth.Repository { return nil },
 				hasher: func() password_hasher.PasswordHasher { return nil },
 			},
 			args: args{
@@ -198,29 +211,11 @@ func Test_service_SignUp(t *testing.T) {
 				Code: http.StatusBadRequest},
 		},
 		{
-			name: "empty role",
-			fields: fields{
-				repo:   func() repository.Repository { return nil },
-				hasher: func() password_hasher.PasswordHasher { return nil },
-			},
-			args: args{
-				ctx: context.Background(),
-				user: models.User{
-					Name:     TestUserName,
-					Password: TestUserPassword,
-					Role:     "",
-				},
-			},
-			wantUser: models.User{},
-			wantErr: &errs.Err{Message: "Key: 'User.Role' Error:Field validation for 'Role' failed on the 'oneof' tag",
-				Code: http.StatusBadRequest},
-		},
-		{
 			name: "user already exists",
 			fields: fields{
-				repo: func() repository.Repository {
-					repo := repoMock.NewRepository(t)
-					repo.On("Get", context.Background(), TestUserName).
+				repo: func() auth.Repository {
+					repo := mockAuth.NewRepository(t)
+					repo.On("GetUser", context.Background(), "name", TestUserName).
 						Return(TestUser, nil)
 					return repo
 				},
@@ -236,14 +231,14 @@ func Test_service_SignUp(t *testing.T) {
 		{
 			name: "hash password error",
 			fields: fields{
-				repo: func() repository.Repository {
-					repo := repoMock.NewRepository(t)
-					repo.On("Get", context.Background(), TestUserName).
+				repo: func() auth.Repository {
+					repo := mockAuth.NewRepository(t)
+					repo.On("GetUser", context.Background(), "name", TestUserName).
 						Return(models.User{}, nil)
 					return repo
 				},
 				hasher: func() password_hasher.PasswordHasher {
-					hasher := hashMock.NewPasswordHasher(t)
+					hasher := mockPasswordHasher.NewPasswordHasher(t)
 					hasher.On("HashPassword", TestUser.Password).
 						Return("", assert.AnError)
 					return hasher
@@ -259,16 +254,16 @@ func Test_service_SignUp(t *testing.T) {
 		{
 			name: "db create user error",
 			fields: fields{
-				repo: func() repository.Repository {
-					repo := repoMock.NewRepository(t)
-					repo.On("Get", context.Background(), TestUserName).
+				repo: func() auth.Repository {
+					repo := mockAuth.NewRepository(t)
+					repo.On("GetUser", context.Background(), "name", TestUserName).
 						Return(models.User{}, nil)
-					repo.On("Create", context.Background(), TestUser).
+					repo.On("CreateUser", context.Background(), TestUser).
 						Return(models.User{}, &errs.Err{Message: "internal server error", Code: http.StatusInternalServerError})
 					return repo
 				},
 				hasher: func() password_hasher.PasswordHasher {
-					hasher := hashMock.NewPasswordHasher(t)
+					hasher := mockPasswordHasher.NewPasswordHasher(t)
 					hasher.On("HashPassword", TestUser.Password).Return(TestUser.Password, nil)
 					return hasher
 				},
@@ -287,7 +282,7 @@ func Test_service_SignUp(t *testing.T) {
 				repo:   tt.fields.repo(),
 				hasher: tt.fields.hasher(),
 			}
-			user, err := s.SignUp(tt.args.ctx, tt.args.user)
+			user, err := s.SignUp(tt.args.ctx, tt.args.user.Name, tt.args.user.Password)
 			assert.Equal(t, tt.wantUser, user)
 			assert.Equal(t, tt.wantErr, err)
 		})
