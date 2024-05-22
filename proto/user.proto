@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "./pb";
+
+import "auth.proto";
+import "google/protobuf/timestamp.proto";
+
+message User {
+    string id = 1;
+    string name = 2;
+    auth.Role role = 3;
+    google.protobuf.Timestamp created_at = 4;
+    google.protobuf.Timestamp updated_at = 5;
+}

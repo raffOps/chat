@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package admin;
+
+import "user.proto";
+
+option go_package = "./pb";
+
+message PingRequest {}
+message PingResponse {
+    string message = 1;
+}
+
+message ListUserRequest {}
+
+message ListUserResponse {
+    repeated user.User user = 1;
+}
+
+service Admin {
+    rpc Ping (PingRequest) returns (PingResponse) {}
+    rpc ListUsers (ListUserRequest) returns (ListUserResponse) {}
+}

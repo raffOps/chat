@@ -83,7 +83,7 @@ func Test_service_Login(t *testing.T) {
 				repo: func() auth.Repository {
 					repo := mockAuth.NewRepository(t)
 					repo.On("GetUser", context.Background(), "name", TestUserName).
-						Return(models.User{}, &errs.Err{Message: "no user found", Code: http.StatusNotFound})
+						Return(models.User{}, errs.ErrNotFound)
 					return repo
 				},
 				hasher:     func() password_hasher.PasswordHasher { return nil },
@@ -94,7 +94,7 @@ func Test_service_Login(t *testing.T) {
 				name:     TestUserName,
 				password: TestUserPassword,
 			},
-			wantErr: &errs.Err{Message: "invalid username/password", Code: http.StatusUnauthorized},
+			wantErr: errs.ErrInvalidUser,
 		},
 		{
 			name: "invalid password",
@@ -118,7 +118,7 @@ func Test_service_Login(t *testing.T) {
 				name:     TestUserName,
 				password: TestUserPassword,
 			},
-			wantErr: &errs.Err{Message: "invalid username/password", Code: http.StatusUnauthorized},
+			wantErr: errs.ErrInvalidUser,
 		},
 	}
 	for _, tt := range tests {
@@ -156,7 +156,7 @@ func Test_service_SignUp(t *testing.T) {
 				repo: func() auth.Repository {
 					repo := mockAuth.NewRepository(t)
 					repo.On("GetUser", context.Background(), "name", TestUserName).
-						Return(models.User{}, nil)
+						Return(models.User{}, errs.ErrNotFound)
 					repo.On("CreateUser", context.Background(), TestUser).
 						Return(TestUser, nil)
 					return repo
@@ -226,7 +226,7 @@ func Test_service_SignUp(t *testing.T) {
 				user: TestUser,
 			},
 			wantUser: models.User{},
-			wantErr:  &errs.Err{Message: "user already exists", Code: http.StatusConflict},
+			wantErr:  errs.ErrUserExists,
 		},
 		{
 			name: "hash password error",
@@ -234,7 +234,7 @@ func Test_service_SignUp(t *testing.T) {
 				repo: func() auth.Repository {
 					repo := mockAuth.NewRepository(t)
 					repo.On("GetUser", context.Background(), "name", TestUserName).
-						Return(models.User{}, nil)
+						Return(models.User{}, errs.ErrNotFound)
 					return repo
 				},
 				hasher: func() password_hasher.PasswordHasher {
@@ -249,7 +249,7 @@ func Test_service_SignUp(t *testing.T) {
 				user: TestUser,
 			},
 			wantUser: models.User{},
-			wantErr:  &errs.Err{Message: "failed to hash password", Code: http.StatusInternalServerError},
+			wantErr:  errs.ErrInternal,
 		},
 		{
 			name: "db create user error",
@@ -257,9 +257,9 @@ func Test_service_SignUp(t *testing.T) {
 				repo: func() auth.Repository {
 					repo := mockAuth.NewRepository(t)
 					repo.On("GetUser", context.Background(), "name", TestUserName).
-						Return(models.User{}, nil)
+						Return(models.User{}, errs.ErrNotFound)
 					repo.On("CreateUser", context.Background(), TestUser).
-						Return(models.User{}, &errs.Err{Message: "internal server error", Code: http.StatusInternalServerError})
+						Return(models.User{}, errs.ErrInternal)
 					return repo
 				},
 				hasher: func() password_hasher.PasswordHasher {
@@ -273,7 +273,7 @@ func Test_service_SignUp(t *testing.T) {
 				user: TestUser,
 			},
 			wantUser: models.User{},
-			wantErr:  &errs.Err{Message: "internal server error", Code: http.StatusInternalServerError},
+			wantErr:  errs.ErrInternal,
 		},
 	}
 	for _, tt := range tests {

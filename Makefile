@@ -13,3 +13,7 @@ migration-up:
 
 mockery:
 	mockery --all
+
+
+cert:
+	cd cert; ./gen.sh; cd ..

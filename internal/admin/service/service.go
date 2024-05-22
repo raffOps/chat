@@ -21,8 +21,7 @@ func (s service) GetUser(ctx context.Context, key, value string) (models.User, *
 }
 
 func (s service) ListUsers(ctx context.Context) ([]models.User, *errs.Err) {
-	//TODO implement me
-	panic("implement me")
+	return s.userRepo.ListUser(ctx)
 }
 
 func NewService(userRepo user.Repository) admin.Service {

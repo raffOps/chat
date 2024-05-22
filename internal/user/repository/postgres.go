@@ -54,10 +54,10 @@ func (p PostgresRepository) GetUser(ctx context.Context, key, value string) (mod
 
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return model.User{}, &errs.Err{Message: "no user found", Code: http.StatusNotFound}
+		return model.User{}, errs.ErrNotFound
 	case err != nil:
 		log.Printf("query error: %v\n", err)
-		return model.User{}, &errs.Err{Message: "internal server error", Code: http.StatusInternalServerError}
+		return model.User{}, errs.ErrInternal
 	default:
 		log.Printf("username is %s, account created on %s\n", username.String, createdAt.Time)
 		return p.fetchUser(id, username, password, role, createdAt, updatedAt, deleteAt), nil
