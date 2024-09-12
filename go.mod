@@ -1,14 +1,18 @@
-module chat
+module github.com/raffops/chat
 
 go 1.23.0
 
 require (
+	github.com/avast/retry-go/v4 v4.6.0
+	github.com/confluentinc/confluent-kafka-go v1.9.2
 	github.com/gorilla/mux v1.8.1
 	github.com/joho/godotenv v1.5.1
-	github.com/redis/go-redis/v9 v9.6.1
+	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/raffops/chat_commons v0.0.0-20240902171052-2582060af3e7
+	golang.org/x/sync v0.8.0
 )
 
 require (
-	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	go.uber.org/multierr v1.10.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 )

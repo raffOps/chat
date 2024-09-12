@@ -1,11 +1,12 @@
 package tests
 
 import (
-	"chat/internal/server"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/raffops/chat/internal/server"
 )
 
 func TestHandler(t *testing.T) {
