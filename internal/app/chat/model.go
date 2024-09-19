@@ -1,6 +1,10 @@
 package chat
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Topic struct {
 	Name   string
@@ -8,8 +12,8 @@ type Topic struct {
 }
 
 type Message struct {
-	Id          string    `json:"id" validate:"required"`
-	Topic       string    `json:"topic" validate:"required"`
+	Id          uuid.UUID `json:"id" validate:"required"`
+	ChatId      uuid.UUID `json:"chat_id" validate:"required"`
 	Offset      int64     `json:"offset" validate:"required"`
 	DeliveredAt time.Time `json:"delivered_at,omitempty" validate:"required"`
 	CreatedAt   time.Time `json:"created_at" validate:"required"`
@@ -19,6 +23,7 @@ type Message struct {
 }
 
 var (
-	MessageWriteTimeout = "10s"
+	MaxDeliveryDelay    = "100s"
+	MessageWriteTimeout = "1000s"
 	MessageReadTimeout  = "10s"
 )

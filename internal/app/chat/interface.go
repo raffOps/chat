@@ -2,6 +2,8 @@ package chat
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 	"github.com/raffops/chat_commons/pkg/errs"
 	"golang.org/x/sync/errgroup"
 )
@@ -16,4 +18,8 @@ type MessageProducer interface {
 
 type MessageConsumer interface {
 	Consume(ctx context.Context, config interface{}, messagesToConsume chan<- Message, topics <-chan []Topic, errGroup *errgroup.Group) errs.ChatError
+}
+
+type UuidGenerator interface {
+	GenerateUuid(namespace uuid.UUID, data []byte) uuid.UUID
 }

@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/raffops/chat/internal/app/chat"
-	"github.com/raffops/chat/pkg"
-	"golang.org/x/sync/errgroup"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/raffops/chat/internal/app/chat"
+	"github.com/raffops/chat/pkg"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -32,7 +33,7 @@ func main() {
 	topics := make(chan []chat.Topic, 1)
 	topics <- []chat.Topic{
 		{
-			"test",
+			"6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 			0,
 		},
 	}
